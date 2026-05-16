@@ -28,7 +28,7 @@ using namespace cv;
 
 // GA parameters
 #define GA_TRIGGER_THRESH 6.2
-#define PRUNE_TRIGGER_THRESH 5.7
+#define PRUNE_TRIGGER_THRESH 6.2
 #define GA_POP 30
 #define GA_GENERATIONS 100
 #define INITIAL_BIAS_THRESHOLD 0.23
