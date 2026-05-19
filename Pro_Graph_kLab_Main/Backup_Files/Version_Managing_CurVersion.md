@@ -87,7 +87,10 @@
     - ```BcpFiles -> Files_1006_2025 -> ..._v7```
       - Version-7.0
     - ```BcpFiles -> Files_1006_2025 -> ..._v8```
-      - **Version-8.0**
+      - Version-8.0
+  - **GP + GA + Pruning + Knowledge Injection**
+    - ```BcpFiles -> Files_0519_2026 -> ..._v1```
+      - **Version-1.0**
 - P5 - ELSE
   - Line-chart generating program
     - ```BcpFiles -> Files_1220 -> ..._v1.py```
