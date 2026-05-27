@@ -90,7 +90,9 @@
       - Version-8.0
   - **GP + GA + Pruning + Knowledge Injection**
     - ```BcpFiles -> Files_0519_2026 -> ..._v1```
-      - **Version-1.0**
+      - Version-1.0
+    - ```BcpFiles -> Files_0519_2026 -> ..._v2```
+      - **Version-2.0**
 - P5 - ELSE
   - Line-chart generating program
     - ```BcpFiles -> Files_1220 -> ..._v1.py```
