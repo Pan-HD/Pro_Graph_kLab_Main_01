@@ -94,16 +94,24 @@
         opencv_world4100.lib
         ```
 
-  - 04 ( .dll文件相关报错解决 )
+  - 04 - OpenMP 支持
 
+    - C/C++　→　语言　→　OpenMP支持
+    
+      - ```
+        是（/openmp）
+        ```
+    
+  - 05 ( .dll文件相关报错解决 )
+  
     - ```
       filename: opencv_world4100.dll
       address: D:\Program_Files\opencv\build\install\x64\vc17\bin
       ```
-
+  
     - ```
       把 opencv_world4100.dll 复制到 Pro_Graph_kLab.exe 所在的目录: 
       F:\ComputerScience\OpenCV_VS_Pro\Pro_Graph_kLab\x64\Release
       ```
-
+  
   
