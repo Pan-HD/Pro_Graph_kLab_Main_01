@@ -20,7 +20,8 @@
 #include <opencv2/cudaimgproc.hpp>
 #include <opencv2/cudafilters.hpp>
 #include <opencv2/cudawarping.hpp>
-#include "SegmentationConfig.h"
+// (!important) The foreground mode (pills: 0, crack: 1) must be confirmed before the program runs.
+#include "SegmentationConfig.h" 
 
 using namespace std;
 using namespace cv;
@@ -31,8 +32,8 @@ using namespace cv;
 // #define idSet 1 // for mark the selected set if the TRAIN_SIZE been set of 1
 
 // GP parameters
-#define POP_SIZE 150 // Pop_Size of GP
-#define GENERATIONS 15000 // Generation of GP
+#define POP_SIZE 100 // Pop_Size of GP
+#define GENERATIONS 10000 // Generation of GP
 #define OFFSPRING_COUNT 20 // OFFSPRING_COUNT of GP
 #define MUTATION_RATE 0.9 // GP
 #define NUM_TYPE_FUNC 16 // GP
@@ -574,11 +575,11 @@ Mat executeContourProcessCPU(const Mat& srcMask, const vector<double>& params) {
     Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(k, k));
     int times = params.size() > 1 ? int(params[1]) / 2 : 0;
     for (int t = 0; t < times; ++t) {
-        erode(maskImg, maskImg, kernel);
+        erode(contourInput, contourInput, kernel);
     }
     vector<vector<Point>> contours;
     findContours(contourInput, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
-    Mat mask(maskImg.rows, maskImg.cols, CV_8UC1, Scalar(BG_PIXEL));
+    Mat mask(contourInput.rows, contourInput.cols, CV_8UC1, Scalar(BG_PIXEL));
     int selType = 0;
     if (params.size() > 2) {
         selType = min(2, int(params[2] / 5));
@@ -606,6 +607,9 @@ Mat executeContourProcessCPU(const Mat& srcMask, const vector<double>& params) {
             }
         }
     }
+#if FOREGROUND_WHITE
+    bitwise_not(mask, mask);
+#endif
     return mask;
 }
 
@@ -2284,14 +2288,14 @@ void multiProcess(Mat imgArr[][2]) {
 
     /*
     vector<string> eliteTreeFiles = {
-        "./imgs_0605_2026_v2/input/elite_trees/best_01_6.95.txt",
-        "./imgs_0605_2026_v2/input/elite_trees/best_02_6.82.txt",
-        "./imgs_0605_2026_v2/input/elite_trees/best_03_6.39.txt"
+        "./imgs_0605_2026_v2/input/elite_trees/best_01_7.17.txt",
+        "./imgs_0605_2026_v2/input/elite_trees/best_02_6.95.txt",
+        "./imgs_0605_2026_v2/input/elite_trees/best_03_6.82.txt"
     };
-
     for (const auto& file : eliteTreeFiles)
     {
         auto tree = loadTreeFromFile(file);
+        printf("score: %.4f\n", CAL_SCORE(tree, imgArr, -1));
         if (tree)
         {
             mutate(tree);
@@ -2299,7 +2303,6 @@ void multiProcess(Mat imgArr[][2]) {
             cout << "[Seed Init] Loaded elite tree: " << file << endl;
         }
     }
-
     while ((int)population.size() < POP_SIZE)
     {
         population.push_back(generateRandomTree());
@@ -2558,12 +2561,14 @@ int main(void) {
     }
     */
 
+
     for (int i = 0; i < TRAIN_SIZE; i++) {
         sprintf_s(inputPathName_ori, "./imgs_0605_2026_v2/input/train/positive/images/crack_%05d.png", i + 1);
         sprintf_s(inputPathName_tar, "./imgs_0605_2026_v2/input/train/positive/masks/crack_%05d.png", i + 1);
         imgArr[i][0] = imread(inputPathName_ori, 0);
         imgArr[i][1] = imread(inputPathName_tar, 0);
     }
+
 
     // basic checks
     for (int i = 0; i < TRAIN_SIZE; ++i) {
