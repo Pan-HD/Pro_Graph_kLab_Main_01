@@ -448,12 +448,18 @@ inline string mutateGrayBits(string s, double rate = 0.01) {
 }
 
 bool isSafeValType(FilterType t) {
+    // GP + GA
+    /*
     if (t == THRESHOLD || t == ERODE || t == DILATE || t == SOBEL_X || t == SOBEL_Y) {
         return false;
     }
     else {
         return true;
     }
+    */
+
+    // GP Only
+    return true;
 }
 
 // =====================================================
