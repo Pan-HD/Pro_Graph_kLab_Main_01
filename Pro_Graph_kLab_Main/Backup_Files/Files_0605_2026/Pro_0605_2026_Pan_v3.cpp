@@ -1149,7 +1149,7 @@ cv::cuda::GpuMat executeTreeCUDA(const shared_ptr<TreeNode>& node, const cv::cud
         }
         case DIFF_PROCESS:
         {
-#if CUDA_EQ_TEST_DILATE
+#if CUDA_EQ_TEST_DIFF
             return fallbackCPU(node, input);
 #endif
 
@@ -2505,11 +2505,16 @@ void multiProcess(Mat imgArr[][2]) {
     }
     // save final images for elite of last generation
     for (int idxSet = 0; idxSet < TRAIN_SIZE; idxSet++) {
+
+        Mat res;
+#if USE_CUDA
         cv::cuda::GpuMat gsrc;
         gsrc.upload(imgArr[idxSet][0]);
         cv::cuda::GpuMat gres = executeTreeCUDA(genInfo.back().eliteTree, gsrc);
-        Mat res;
         gres.download(res);
+#else
+        res = executeTree(genInfo.back().eliteTree, imgArr[idxSet][0]);
+#endif
 
         /*
         sprintf_s(imgName_pro[idxSet], "./imgs_0605_2026_v3/output/train_output/img_0%d/Gen-Final.png", idxSet + 1);

@@ -30,7 +30,7 @@
       - ```
         Experiment on changes in data scale
         train: 5 imgs
-        test: 200 
+        test: 200 imgs
         ```
 
 - 

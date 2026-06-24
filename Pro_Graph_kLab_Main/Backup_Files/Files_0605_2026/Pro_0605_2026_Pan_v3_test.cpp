@@ -32,6 +32,13 @@ using namespace cv;
 #define MAX_DEPTH 12 // { 0, 1, 2, ... } GP
 #define NUM_TYPE_FUNC 16 // GP
 
+#define CUDA_EQ_TEST_BILATERAL 0
+#define CUDA_EQ_TEST_MED       1 // 6.80
+#define CUDA_EQ_TEST_BLUR      1 // 6.78
+#define CUDA_EQ_TEST_ERODE     1 // 6.75
+#define CUDA_EQ_TEST_DILATE    1 // 6.77
+#define CUDA_EQ_TEST_DIFF      1
+
 enum FilterType { // type-terminal and type-function
     TERMINAL_INPUT,
     GAUSSIAN_BLUR,
@@ -454,6 +461,154 @@ Mat executeContourProcessCPU(const Mat& srcMask, const vector<double>& params) {
     return mask;
 }
 
+Mat executeTree(const shared_ptr<TreeNode>& node, const Mat& input) {
+    if (!node) return input.clone();
+    // For unary, compute child result once; for binary, compute both once
+    switch (node->type) {
+    case TERMINAL_INPUT:
+        return input.clone();
+    case GAUSSIAN_BLUR: {
+        Mat child = executeTree(node->children[0], input);
+        int k = max(1, int(node->params.size() > 0 ? int(node->params[0]) : 3));
+        if ((k % 2) == 0) k |= 1;
+        Mat dst;
+        double sigma = node->params.size() > 1 ? node->params[1] : 1.5;
+        GaussianBlur(child, dst, Size(k, k), sigma);
+        return dst;
+    }
+    case MED_BLUR: {
+        Mat child = executeTree(node->children[0], input);
+        int k = max(1, int(node->params.size() > 0 ? int(node->params[0]) : 3));
+        if ((k % 2) == 0) k |= 1;
+        Mat dst;
+        medianBlur(child, dst, k);
+        return dst;
+    }
+    case BLUR: {
+        Mat child = executeTree(node->children[0], input);
+        int k = max(1, int(node->params.size() > 0 ? int(node->params[0]) : 3));
+        if ((k % 2) == 0) k |= 1;
+        Mat dst;
+        blur(child, dst, Size(k, k));
+        return dst;
+    }
+    case BILATERAL_FILTER: {
+        Mat child = executeTree(node->children[0], input);
+        int d = node->params.size() > 0 ? int(node->params[0]) : 9;
+        double sigmaColor = node->params.size() > 1 ? node->params[1] : 75;
+        double sigmaSpace = node->params.size() > 2 ? node->params[2] : 75;
+        Mat dst;
+        bilateralFilter(child, dst, d, sigmaColor, sigmaSpace);
+        return dst;
+    }
+    case SOBEL_X: {
+        Mat child = executeTree(node->children[0], input);
+        int k = max(1, int(node->params.size() > 0 ? int(node->params[0]) : 3));
+        if ((k % 2) == 0) k |= 1;
+        Mat dst;
+        Sobel(child, dst, CV_16S, 1, 0, k);
+        // convert back to 8-bit absolute
+        Mat dst8;
+        convertScaleAbs(dst, dst8);
+        return dst8;
+    }
+    case SOBEL_Y: {
+        Mat child = executeTree(node->children[0], input);
+        int k = max(1, int(node->params.size() > 0 ? int(node->params[0]) : 3));
+        if ((k % 2) == 0) k |= 1;
+        Mat dst;
+        Sobel(child, dst, CV_16S, 0, 1, k);
+        Mat dst8;
+        convertScaleAbs(dst, dst8);
+        return dst8;
+    }
+    case CANNY: {
+        Mat child = executeTree(node->children[0], input);
+        double t1 = node->params.size() > 0 ? node->params[0] : 100;
+        double t2 = node->params.size() > 1 ? node->params[1] : 200;
+        Mat dst;
+        Canny(child, dst, t1, t2);
+        return dst;
+    }
+    case DIFF_PROCESS: {
+        // --- IMPORTANT: compute child outputs once (cache) ---
+        Mat a = executeTree(node->children[0], input);
+        Mat b = executeTree(node->children[1], input);
+        Mat dst = Mat::zeros(input.size(), CV_8UC1);
+        CV_Assert(a.size() == b.size());
+        for (int y = 0; y < a.rows; ++y) {
+            const uchar* pa = a.ptr<uchar>(y);
+            const uchar* pb = b.ptr<uchar>(y);
+            uchar* pd = dst.ptr<uchar>(y);
+            for (int x = 0; x < a.cols; ++x) {
+                int diffVal = int(pa[x]) - int(pb[x]);
+                if (diffVal < 0) diffVal = 0;
+                pd[x] = static_cast<uchar>(std::min(255, diffVal));
+            }
+        }
+        return dst;
+    }
+    case THRESHOLD: {
+        Mat child = executeTree(node->children[0], input);
+        double th = node->params.size() > 0 ? node->params[0] : 127.0;
+        Mat dst;
+        threshold(child, dst, th, 255, THRESH_BINARY);
+        return dst;
+    }
+    case ERODE: {
+        Mat child = executeTree(node->children[0], input);
+        int r = node->params.size() > 0 ? int(node->params[0]) : 1;
+        int k = 1 + 2 * max(0, r);
+        Mat kernel = getStructuringElement(MORPH_RECT, Size(k, k));
+        Mat dst;
+        erode(child, dst, kernel);
+        return dst;
+    }
+    case DILATE: {
+        Mat child = executeTree(node->children[0], input);
+        int r = node->params.size() > 0 ? int(node->params[0]) : 1;
+        int k = 1 + 2 * max(0, r);
+        Mat kernel = getStructuringElement(MORPH_RECT, Size(k, k));
+        Mat dst;
+        dilate(child, dst, kernel);
+        return dst;
+    }
+    case CONTOUR_PROCESS: {
+        Mat child = executeTree(node->children[0], input);
+        return executeContourProcessCPU(child, node->params);
+    }
+    case BITWISE_AND: {
+        Mat a = executeTree(node->children[0], input);
+        Mat b = executeTree(node->children[1], input);
+        Mat dst;
+        bitwise_and(a, b, dst);
+        return dst;
+    }
+    case BITWISE_OR: {
+        Mat a = executeTree(node->children[0], input);
+        Mat b = executeTree(node->children[1], input);
+        Mat dst;
+        bitwise_or(a, b, dst);
+        return dst;
+    }
+    case BITWISE_NOT: {
+        Mat a = executeTree(node->children[0], input);
+        Mat dst;
+        bitwise_not(a, dst);
+        return dst;
+    }
+    case BITWISE_XOR: {
+        Mat a = executeTree(node->children[0], input);
+        Mat b = executeTree(node->children[1], input);
+        Mat dst;
+        bitwise_xor(a, b, dst);
+        return dst;
+    }
+    default:
+        return input.clone();
+    }
+}
+
 cv::Ptr<cv::cuda::Filter> getGaussianFilter(int srcType, int dstType, int ksize, double sigma) {
     GaussianKey key;
     key.srcType = srcType;
@@ -567,6 +722,23 @@ cv::Ptr<cv::cuda::Filter> getMorphologyFilter(int op, int srcType, int ksize) {
         gMorphologyCache[key] = filter;
         return filter;
     }
+}
+
+cv::cuda::GpuMat fallbackCPU(
+    const shared_ptr<TreeNode>& node,
+    const cv::cuda::GpuMat& input)
+{
+    Mat cpuInput;
+    input.download(cpuInput, getCudaStream());
+    getCudaStream().waitForCompletion();
+
+    Mat cpuRes = executeTree(node, cpuInput);
+
+    cv::cuda::GpuMat gpuRes;
+    gpuRes.upload(cpuRes, getCudaStream());
+    getCudaStream().waitForCompletion();
+
+    return gpuRes;
 }
 
 cv::cuda::GpuMat executeTreeCUDA(const shared_ptr<TreeNode>& node, const cv::cuda::GpuMat& input)
@@ -793,7 +965,7 @@ cv::cuda::GpuMat executeTreeCUDA(const shared_ptr<TreeNode>& node, const cv::cud
         }
         case DIFF_PROCESS:
         {
-#if CUDA_EQ_TEST_DILATE
+#if CUDA_EQ_TEST_DIFF
             return fallbackCPU(node, input);
 #endif
 
